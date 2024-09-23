@@ -2,9 +2,10 @@ import express, { type Request, type Response } from "express";
 import cors from "cors";
 
 import { databaseClient } from "./tools/database";
+import { calculateHash256 } from "./tools/crypto";
 
 const PORT = 8080;
-const app = express();
+export const app = express();
 
 app.use(cors());
 app.use(express.json());
@@ -16,7 +17,12 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.get("/:key", (req: Request<{ key: string }>, res: Response) => {
-
+  const data = databaseClient.get(req.params.key);
+  if (data.success === true && data.data) {
+    res.status(200).json({ ...data, dataId: calculateHash256(data.data) });
+  } else {
+    res.status(500).json({ ...data });
+  }
 });
 
 app.post(
