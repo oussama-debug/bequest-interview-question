@@ -25,6 +25,33 @@ app.get("/:key", (req: Request<{ key: string }>, res: Response) => {
   }
 });
 
+app.post('/verify', (
+  req: Request<any, any, { [key: string]: any }>,
+  res: Response
+) => {
+  const dataToVerify = JSON.parse(req.body.data)
+  const verified = databaseClient.verify(dataToVerify);
+  res.status(200).json({ verified: verified});
+});
+
+app.post(
+  "/",
+  (
+    req: Request<any, any, { [key: string]: any }>,
+    res: Response
+  ) => {
+    const newData = JSON.parse(req.body.data);
+    const keys = Object.keys(newData);
+
+    for (let key of keys) {
+      if(newData[key].data) {
+        databaseClient.set(key, newData[key].data);
+      }
+    }
+    res.status(200).json({ success: true });
+  }
+);
+
 app.post(
   "/:key",
   (

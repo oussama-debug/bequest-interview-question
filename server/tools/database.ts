@@ -6,9 +6,11 @@ export interface DatabaseEntry {
   data: string;
   hash: string;
 }
+
 export interface Database {
   [key: string]: DatabaseEntry;
 }
+
 export interface DatabaseRequest {
   success: boolean;
   data: null | string;
@@ -18,15 +20,50 @@ export interface DatabaseRequest {
 }
 
 export class DatabaseClient {
-  private __database: Database;
+  private __database: Database & { hash: string };
 
   constructor() {
     const databaseAlreadyExists = this.read();
     if (databaseAlreadyExists) {
       this.__database = JSON.parse(databaseAlreadyExists);
     } else {
-      this.__database = {};
+      const firstData = {
+        data: "Hello world",
+        hash: calculateHash256("Hello world"),
+      };
+      this.__database = {
+        key1: { data: "Hello world", hash: calculateHash256("Hello world") },
+        hash: calculateHash256(JSON.stringify(firstData)) as string,
+      } as any;
+      this.save();
     }
+  }
+
+  public verify(data: Database) {
+    // the verification process is done against the backup
+    let dataWithOutGlobalHash = data;
+    delete dataWithOutGlobalHash["hash"];
+    const globalHash = calculateHash256(JSON.stringify(dataWithOutGlobalHash));
+    let newData = { hash: globalHash };
+    const keys = Object.keys(data);
+
+    if(globalHash !== this.__database.hash) {
+      return false;
+    }
+
+    // recalculate hashes for each key
+    // after recovering from backup
+    for (let key of keys) {
+      this.recover(key);
+      newData[key] = {
+        data: dataWithOutGlobalHash[key].data,
+        hash: calculateHash256(dataWithOutGlobalHash[key].data),
+      };
+
+      if(newData[key].hash !== data[key].hash) { return false;}
+    }
+
+    return true;
   }
 
   // backup functions
@@ -38,6 +75,12 @@ export class DatabaseClient {
 
       if (dataExists && calculateHash256(dataExists.data) === dataExists.data) {
         this.__database[key] = dataExists;
+        let withOutPreviousHash = this.__database;
+        delete withOutPreviousHash["hash"];
+        // remove the old hash
+        this.__database.hash = calculateHash256(
+          JSON.stringify(withOutPreviousHash)
+        );
         return true;
       }
       return false;
@@ -69,10 +112,9 @@ export class DatabaseClient {
       // warn user that data has been tampered with
       if (hash !== this.__database[key].hash) {
         const tamperedData = this.__database[key].data;
-
-        // TODO: recover data mechanism
         // if data recovery is successful then return the recovered data
         // else just inform user data recovery has failed
+
         const dataWasRecoverable = this.recover(key);
         if (!dataWasRecoverable) {
           return {
@@ -109,7 +151,12 @@ export class DatabaseClient {
   public set(key: string, value: string): string {
     const hash = calculateHash256(value);
     this.__database[key] = { data: value, hash: hash };
-
+    let withOutPreviousHash = this.__database;
+    delete withOutPreviousHash["hash"];
+    // remove the old hash
+    this.__database.hash = calculateHash256(
+      JSON.stringify(withOutPreviousHash)
+    );
     // save database
     // and back it up
     this.save();
@@ -121,6 +168,5 @@ export class DatabaseClient {
 
 // instance of database with first data;
 const databaseClient = new DatabaseClient();
-databaseClient.set("data", "Hello World");
 
 export { databaseClient };
